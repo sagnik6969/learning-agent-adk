@@ -45,4 +45,5 @@ agent = Agent(
     ),
     instruction=GENERATE_QUERY_PROMPT,
     output_schema=SearchQuery,
+    output_key="search_queries"
 )

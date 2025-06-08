@@ -1,15 +1,25 @@
+import time
 from typing import override
 from google.adk.agents import BaseAgent, LlmAgent
+from root_learning_agent.services.context_stope import ContextStore
 from root_learning_agent.sub_agents.checkpoint_generator_agent import (
     agent as checkpoint_generator_agent,
 )
-import logging
 from root_learning_agent.utils import format_checkpoint_for_display
 from root_learning_agent.sub_agents.generate_query_agent import (
     agent as generate_query_for_web_search_agent,
 )
+from root_learning_agent.sub_agents.question_generator_agent import agent as question_generator_agent
 from google.adk.events import Event, EventActions
 import uuid
+from langchain_openai import OpenAIEmbeddings
+from .services.chunk_context import chunk_context
+from .services.search_web import search_web
+
+
+embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+context_store = ContextStore()
+# from .services.search_web import search_web
 
 
 class LearningAgent(BaseAgent):
@@ -17,7 +27,7 @@ class LearningAgent(BaseAgent):
     # search_web_agent: LlmAgent
     # context_validation_agent: LlmAgent
     generate_checkpoints_agent: LlmAgent
-    # generate_question_agent: LlmAgent
+    generate_question_agent: LlmAgent
     # verify_answer_agent: LlmAgent
     # tech_concept_agent: LlmAgent
 
@@ -30,19 +40,31 @@ class LearningAgent(BaseAgent):
         # search_web_agent: LlmAgent,
         # context_validation_agent: LlmAgent,
         generate_checkpoints_agent: LlmAgent,
-        # generate_question_agent: LlmAgent,
+        generate_question_agent: LlmAgent,
         # verify_answer_agent: LlmAgent,
         # tech_concept_agent: LlmAgent,
     ):
+        # content might be None or represent the action taken
+
+        sub_agent_list = [
+            generate_query_agent,
+            # search_web_agent: LlmAgent,
+            # context_validation_agent: LlmAgent,
+            generate_checkpoints_agent,
+            generate_question_agent,
+            # verify_answer_agent: LlmAgent,
+            # tech_concept_agent: LlmAgent,
+        ]
         super().__init__(
             name=name,
             generate_query_agent=generate_query_agent,
             # search_web_agent=search_web_agent,
             # context_validation_agent=context_validation_agent,
             generate_checkpoints_agent=generate_checkpoints_agent,
-            # generate_question_agent=generate_question_agent,
+            generate_question_agent=generate_question_agent,
             # verify_answer_agent=verify_answer_agent,
             # tech_concept_agent=tech_concept_agent,
+            sub_agents=sub_agent_list,
         )
 
     @override
@@ -52,7 +74,7 @@ class LearningAgent(BaseAgent):
             or not ctx.session.state["previous_step"]
         ):
             async for event in self.generate_checkpoints_agent.run_async(ctx):
-                # event.content = None
+                event.content = None
                 yield event
 
             yield Event(
@@ -93,12 +115,68 @@ class LearningAgent(BaseAgent):
 
             if next_step == "generate_query":
                 async for event in self.generate_query_agent.run_async(ctx):
-                    # event.content = None
+                    event.content = None
                     yield event
+
+                state_changes = search_web(
+                    search_queries=ctx.session.state["search_queries"],
+                    context_store=context_store,
+                    embeddings=embeddings,
+                )
+
+                actions_with_update = EventActions(state_delta=state_changes)
+                system_event = Event(
+                    invocation_id=str(uuid.uuid4()),
+                    author=self.name,
+                    actions=actions_with_update,
+                    timestamp=time.time(),
+                )
+                yield system_event
+
+            else:
+                state_changes = chunk_context(user_input)
+                actions_with_update = EventActions(state_delta=state_changes)
+                system_event = Event(
+                    invocation_id=str(uuid.uuid4()),
+                    author=self.name,
+                    actions=actions_with_update,
+                    timestamp=time.time(),
+                )
+                yield system_event
+            
+            async for event in self.generate_question_agent.run_async(ctx):
+                    event.content = None
+                    yield event
+            
+            yield Event(
+                **{
+                    "author": self.name,
+                    "invocation_id": str(uuid.uuid4()),
+                    "content": {
+                        "parts": [
+                            {
+                                "text": format_checkpoint_for_display(
+                                    ctx.session.state["question"]
+                                )
+                            },
+                        ]
+                    },
+                    "actions": {
+                        "state_delta": {
+                            "previous_step": self.generate_question_agent.name
+                        },
+                    },
+                    "partial": False,
+                    "turn_complete": True,
+                }
+            )
+            
+            
 
 
 root_agent = LearningAgent(
     name="learning_agent",
     generate_checkpoints_agent=checkpoint_generator_agent,
     generate_query_agent=generate_query_for_web_search_agent,
+    generate_question_agent=question_generator_agent
 )
