@@ -5,12 +5,15 @@ from root_learning_agent.sub_agents.checkpoint_generator_agent import (
 )
 import logging
 from root_learning_agent.utils import format_checkpoint_for_display
+from root_learning_agent.sub_agents.generate_query_agent import (
+    agent as generate_query_for_web_search_agent,
+)
 from google.adk.events import Event, EventActions
 import uuid
 
 
 class LearningAgent(BaseAgent):
-    # generate_query_agent: LlmAgent
+    generate_query_agent: LlmAgent
     # search_web_agent: LlmAgent
     # context_validation_agent: LlmAgent
     generate_checkpoints_agent: LlmAgent
@@ -23,7 +26,7 @@ class LearningAgent(BaseAgent):
     def __init__(
         self,
         name: str,
-        # generate_query_agent: LlmAgent,
+        generate_query_agent: LlmAgent,
         # search_web_agent: LlmAgent,
         # context_validation_agent: LlmAgent,
         generate_checkpoints_agent: LlmAgent,
@@ -33,7 +36,7 @@ class LearningAgent(BaseAgent):
     ):
         super().__init__(
             name=name,
-            # generate_query_agent=generate_query_agent,
+            generate_query_agent=generate_query_agent,
             # search_web_agent=search_web_agent,
             # context_validation_agent=context_validation_agent,
             generate_checkpoints_agent=generate_checkpoints_agent,
@@ -68,21 +71,34 @@ class LearningAgent(BaseAgent):
                             },
                         ]
                     },
-                    # "actions": {
-                    #     "state_delta": {
-                    #         "previous_step": checkpoint_generator_agent.name
-                    #     },
-                    # },
+                    "actions": {
+                        "state_delta": {
+                            "previous_step": checkpoint_generator_agent.name
+                        },
+                    },
                     "partial": False,
                     "turn_complete": True,
                 }
             )
 
             return
+        elif ctx.session.state["previous_step"] == checkpoint_generator_agent.name:
+            user_input: str = ctx.session.events[-1].content.parts[0].text
+            next_step: str | None = None
+
+            if "no" in user_input.lower():
+                next_step = "generate_query"
+            else:
+                next_step = "chunk_context"
+
+            if next_step == "generate_query":
+                async for event in self.generate_query_agent.run_async(ctx):
+                    # event.content = None
+                    yield event
 
 
 root_agent = LearningAgent(
-    name="learning_agent", generate_checkpoints_agent=checkpoint_generator_agent
+    name="learning_agent",
+    generate_checkpoints_agent=checkpoint_generator_agent,
+    generate_query_agent=generate_query_for_web_search_agent,
 )
-
-x = 0
