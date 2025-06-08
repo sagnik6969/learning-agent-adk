@@ -1,9 +1,12 @@
 from typing import override
 from google.adk.agents import BaseAgent, LlmAgent
-from root_learning_agent.sub_agents.checkpoint_generator_agent import agent as checkpoint_generator_agent
+from root_learning_agent.sub_agents.checkpoint_generator_agent import (
+    agent as checkpoint_generator_agent,
+)
 import logging
 from root_learning_agent.utils import format_checkpoint_for_display
 from google.adk.events import Event, EventActions
+import uuid
 
 
 class LearningAgent(BaseAgent):
@@ -38,28 +41,48 @@ class LearningAgent(BaseAgent):
             # verify_answer_agent=verify_answer_agent,
             # tech_concept_agent=tech_concept_agent,
         )
-    
+
     @override
     async def _run_async_impl(self, ctx):
-
-        if "current_step" not in ctx.session.state or not ctx.session.state["current_step"]:
+        if (
+            "previous_step" not in ctx.session.state
+            or not ctx.session.state["previous_step"]
+        ):
             async for event in self.generate_checkpoints_agent.run_async(ctx):
-                event.content = None
+                # event.content = None
                 yield event
 
-            yield Event(**{
-                "author": "TravelAgent",
-                "invocation_id": "e-xyz...",
-                "content": {"parts": [{"text": format_checkpoint_for_display(ctx.session.state["checkpoints"])}]},
-                "partial": False,
-                "turn_complete": True
-            })
+            yield Event(
+                **{
+                    "author": self.name,
+                    "invocation_id": str(uuid.uuid4()),
+                    "content": {
+                        "parts": [
+                            {
+                                "text": format_checkpoint_for_display(
+                                    ctx.session.state["checkpoints"]
+                                )
+                            },
+                            {
+                                "text": "Do You Have any preffered notes you want to share? If yes paste the note in the chatbox else reply with 'No'"
+                            },
+                        ]
+                    },
+                    # "actions": {
+                    #     "state_delta": {
+                    #         "previous_step": checkpoint_generator_agent.name
+                    #     },
+                    # },
+                    "partial": False,
+                    "turn_complete": True,
+                }
+            )
 
+            return
 
 
 root_agent = LearningAgent(
-    name="learning_agent",
-    generate_checkpoints_agent=checkpoint_generator_agent
+    name="learning_agent", generate_checkpoints_agent=checkpoint_generator_agent
 )
 
 x = 0

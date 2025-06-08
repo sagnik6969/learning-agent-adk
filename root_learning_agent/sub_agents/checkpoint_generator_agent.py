@@ -1,5 +1,8 @@
 from google.adk.agents import Agent
 from pydantic import BaseModel, Field
+from google.adk.agents.callback_context import CallbackContext
+from google.adk.models import LlmRequest
+from google.genai.types import Part,Content
 
 
 CHECKPOINT_GENERATOR_PROMPT = """
@@ -38,12 +41,32 @@ class Checkpoints(BaseModel):
     )
 
 
+def before_model_callback(callback_context: CallbackContext, llm_request: LlmRequest):
+    modified_system_prompt = llm_request.config.system_instruction
+    modified_system_prompt = (
+        modified_system_prompt
+        + f"""
+            Learning Topic & Objectives:
+            {llm_request.contents[-1].parts[0].text}
+        """
+    )
+    llm_request.config.system_instruction = modified_system_prompt
+    llm_request.contents = []
+    llm_request.contents.append(
+        Content(parts=[
+        Part(text="Handle the requests as specified in the System Instruction.")
+        ],
+        role='user')
+    )
+
+
 agent = Agent(
     name="checkpoint_generator_agent",
     model="gemini-2.0-flash",
     description=("Creates learning checkpoints based on given topic and goals."),
     instruction=CHECKPOINT_GENERATOR_PROMPT,
+    before_model_callback=before_model_callback,
     output_schema=Checkpoints,
-    output_key="checkpoints"
-
+    output_key="checkpoints",
+    include_contents="default",
 )
