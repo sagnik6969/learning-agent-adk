@@ -1,6 +1,6 @@
 from google.adk.agents import Agent
 from pydantic import BaseModel
-from google.genai.types import Part,Content
+from google.genai.types import Part, Content
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models import LlmRequest
 
@@ -17,22 +17,24 @@ Output should be a single, well-formulated question that effectively tests the c
 
 class QuestionOutput(BaseModel):
     """Structure for question generation output"""
+
     question: str
 
 
 def before_model_callback(callback_context: CallbackContext, llm_request: LlmRequest):
-
-    current_checkpoint = callback_context.state["current_checkpoint"] if "current_checkpoint" in callback_context.state else 0
-    next_checkpoint = current_checkpoint + 1
+    current_checkpoint = (
+        callback_context.state["current_checkpoint"]
+        if "current_checkpoint" in callback_context.state
+        else 0
+    )
+    callback_context.state["current_checkpoint"] = current_checkpoint
 
     checkpoint_info = callback_context.state["checkpoints"][current_checkpoint]
-    callback_context.state["current_checkpoint"] = next_checkpoint
 
-    formatted_checkpoit = f"""Checkpoint Description: {checkpoint_info['description']}
+    formatted_checkpoit = f"""Checkpoint Description: {checkpoint_info["description"]}
         Success Criteria:
-        {chr(10).join(f"- {c}" for c in checkpoint_info['criteria'])}
-        Verification Method: {checkpoint_info['verification']}"""
-
+        {chr(10).join(f"- {c}" for c in checkpoint_info["criteria"])}
+        Verification Method: {checkpoint_info["verification"]}"""
 
     modified_system_prompt = llm_request.config.system_instruction
     modified_system_prompt = (
@@ -45,11 +47,14 @@ def before_model_callback(callback_context: CallbackContext, llm_request: LlmReq
     llm_request.config.system_instruction = modified_system_prompt
     llm_request.contents = []
     llm_request.contents.append(
-        Content(parts=[
-        Part(text="Handle the requests as specified in the System Instruction.")
-        ],
-        role='user')
+        Content(
+            parts=[
+                Part(text="Handle the requests as specified in the System Instruction.")
+            ],
+            role="user",
+        )
     )
+
 
 agent = Agent(
     name="question_generator_agent",
@@ -59,5 +64,5 @@ agent = Agent(
     ),
     instruction=QUESTION_GENERATOR_AGENT_PROMPT,
     output_schema=QuestionOutput,
-    output_key="current_question"
+    output_key="current_question",
 )

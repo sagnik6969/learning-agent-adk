@@ -1,1 +1,1 @@
-uv run adk web --reload
+uv run --env-file .env adk web --reload
