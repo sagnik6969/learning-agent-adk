@@ -171,6 +171,8 @@ def format_verification_results(verifications:dict):
     
     result += ("-" * 50 + "\n")
 
+    return result
+
 def format_teaching_results(teachings:dict):
     """Pretty pring  Feynman teaching results with improved formatting"""
     result = ""
@@ -230,3 +232,5 @@ def format_teaching_results(teachings:dict):
     result += "\n"
     
     result += ("=" * 70 + "\n")
+
+    return result

@@ -197,7 +197,7 @@ class LearningAgent(BaseAgent):
             if ctx.session.state["verifications"]["understanding_level"] < 0.7:
                 # Teach concept if unterstanding level is bellow threshold
                 async for event in self.teach_concept_agent.run_async(ctx):
-                    event.content = None
+                    # event.content = None
                     yield event
                 
                 yield self.get_ai_text_message_event(
@@ -209,11 +209,21 @@ class LearningAgent(BaseAgent):
             if current_checkpoint_idx + 1 < len(
                 ctx.session.state["checkpoints"]["checkpoints"]
             ):
-                # Go to xext check point
+                # Go to next check point
                 state_changes = {"current_checkpoint": current_checkpoint_idx + 1}
                 yield self.get_state_update_event(state_changes)
-                async for event in self._run_async_impl(ctx):
+
+                async for event in self.generate_question_agent.run_async(ctx):
+                    event.content = None
                     yield event
+
+                yield self.get_ai_text_message_event(
+                    [ctx.session.state["current_question"]["question"]]
+                )
+                yield self.get_state_update_event(
+                    {"previous_step": self.generate_question_agent.name}
+                )
+
             else:
                 ## __END__
                 yield self.get_ai_text_message_event(
