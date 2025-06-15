@@ -1,6 +1,6 @@
 from google.adk.agents import Agent
 from pydantic import BaseModel
-from google.genai.types import Part,Content
+from google.genai.types import Part, Content
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models import LlmRequest
 from pydantic import Field
@@ -22,6 +22,7 @@ Output should include:
 
 class LearningVerification(BaseModel):
     """Structure for verification results"""
+
     understanding_level: float = Field(..., ge=0, le=1)
     feedback: str
     suggestions: list[str]
@@ -29,18 +30,13 @@ class LearningVerification(BaseModel):
 
 
 def before_model_callback(callback_context: CallbackContext, llm_request: LlmRequest):
-
-    current_checkpoint_idx = callback_context.state["current_checkpoint"] 
+    current_checkpoint_idx = callback_context.state["current_checkpoint"]
     checkpoint_info = callback_context.state["checkpoints"][current_checkpoint_idx]
     relevant_chunks = callback_context.state["relevant_chunks"]
 
-
-
-
-
     input = f"""
-        Question: {callback_context.state['current_question']}
-        Answer: {callback_context.state['current_answer']}
+        Question: {callback_context.state["current_question"]}
+        Answer: {callback_context.state["current_answer"]}
         Checkpoint Description: {checkpoint_info.description}
         Success Criteria:
         {chr(10).join(f"- {c}" for c in checkpoint_info.criteria)}
@@ -48,7 +44,6 @@ def before_model_callback(callback_context: CallbackContext, llm_request: LlmReq
         Context:
         {chr(10).join(relevant_chunks)}
         Assess the answer."""
-
 
     modified_system_prompt = llm_request.config.system_instruction
     modified_system_prompt = (
@@ -61,11 +56,14 @@ def before_model_callback(callback_context: CallbackContext, llm_request: LlmReq
     llm_request.config.system_instruction = modified_system_prompt
     llm_request.contents = []
     llm_request.contents.append(
-        Content(parts=[
-        Part(text="Handle the requests as specified in the System Instruction.")
-        ],
-        role='user')
+        Content(
+            parts=[
+                Part(text="Handle the requests as specified in the System Instruction.")
+            ],
+            role="user",
+        )
     )
+
 
 agent = Agent(
     name="question_generator_agent",
@@ -75,5 +73,5 @@ agent = Agent(
     ),
     instruction=VALIDATE_ANSWER_PROMPT,
     output_schema=LearningVerification,
-    output_key="current_question"
+    output_key="current_question",
 )

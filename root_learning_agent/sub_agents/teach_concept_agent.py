@@ -1,6 +1,6 @@
 from google.adk.agents import Agent
 from pydantic import BaseModel
-from google.genai.types import Part,Content
+from google.genai.types import Part, Content
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models import LlmRequest
 
@@ -20,23 +20,22 @@ Focus on making complex ideas accessible and memorable."""
 
 class FeynmanTeaching(BaseModel):
     """Structure for Feynman teaching method"""
+
     simplified_explanation: str
     key_concepts: list[str]
     analogies: list[str]
 
 
 def before_model_callback(callback_context: CallbackContext, llm_request: LlmRequest):
-
-    current_checkpoint_idx = callback_context.state["current_checkpoint"] 
+    current_checkpoint_idx = callback_context.state["current_checkpoint"]
     checkpoint_info = callback_context.state["checkpoints"][current_checkpoint_idx]
 
     input = f"""
-        Criteria: {checkpoint_info['criteria']}
-        Verification: {callback_context.state['verifications']}
+        Criteria: {checkpoint_info["criteria"]}
+        Verification: {callback_context.state["verifications"]}
         Context:
-        {callback_context.state['context_chunks']}
+        {callback_context.state["context_chunks"]}
         Create a Feynman teaching explanation."""
-
 
     modified_system_prompt = llm_request.config.system_instruction
     modified_system_prompt = (
@@ -49,11 +48,14 @@ def before_model_callback(callback_context: CallbackContext, llm_request: LlmReq
     llm_request.config.system_instruction = modified_system_prompt
     llm_request.contents = []
     llm_request.contents.append(
-        Content(parts=[
-        Part(text="Handle the requests as specified in the System Instruction.")
-        ],
-        role='user')
+        Content(
+            parts=[
+                Part(text="Handle the requests as specified in the System Instruction.")
+            ],
+            role="user",
+        )
     )
+
 
 agent = Agent(
     name="teach_concept_agent",
@@ -63,5 +65,5 @@ agent = Agent(
     ),
     instruction=TEACH_CONCEPT_PROMPT,
     output_schema=FeynmanTeaching,
-    output_key="current_question"
+    output_key="current_question",
 )

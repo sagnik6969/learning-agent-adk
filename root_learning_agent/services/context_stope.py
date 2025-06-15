@@ -3,7 +3,6 @@ import uuid
 from langchain_community.utils.math import cosine_similarity
 
 
-
 class ContextStore:
     """Store for managing context chunks and their embeddings in memory.
 
@@ -49,17 +48,16 @@ class ContextStore:
         namespace = ("context",)
         memory = self.store.get(namespace, context_key)
         return memory.value
-    
-    def get_relevent_chunks(self,context_key:str,embeddings,query:str):
+
+    def get_relevent_chunks(self, context_key: str, embeddings, query: str):
         context = self.get_context(context_key)
-        chunks = context['chunks']
-        chunk_embeddings = context['embeddings']
+        chunks = context["chunks"]
+        chunk_embeddings = context["embeddings"]
         query = embeddings.embed_query(query)
         similarities = cosine_similarity([query], chunk_embeddings)[0]
-        top_3_indices = sorted(range(len(similarities)), 
-                         key=lambda i: similarities[i], 
-                         reverse=True)[:3]
+        top_3_indices = sorted(
+            range(len(similarities)), key=lambda i: similarities[i], reverse=True
+        )[:3]
         relevant_chunks = [chunks[i] for i in top_3_indices]
 
         return relevant_chunks
-

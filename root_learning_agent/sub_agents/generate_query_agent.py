@@ -1,6 +1,6 @@
 from google.adk.agents import Agent
 from pydantic import BaseModel, Field
-from google.genai.types import Part,Content
+from google.genai.types import Part, Content
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models import LlmRequest
 
@@ -19,6 +19,7 @@ class SearchQuery(BaseModel):
 
     search_queries: list = Field(None, description="Search queries for retrieval.")
 
+
 def before_model_callback(callback_context: CallbackContext, llm_request: LlmRequest):
     modified_system_prompt = llm_request.config.system_instruction
     modified_system_prompt = (
@@ -31,11 +32,14 @@ def before_model_callback(callback_context: CallbackContext, llm_request: LlmReq
     llm_request.config.system_instruction = modified_system_prompt
     llm_request.contents = []
     llm_request.contents.append(
-        Content(parts=[
-        Part(text="Handle the requests as specified in the System Instruction.")
-        ],
-        role='user')
+        Content(
+            parts=[
+                Part(text="Handle the requests as specified in the System Instruction.")
+            ],
+            role="user",
+        )
     )
+
 
 agent = Agent(
     name="generate_query_agent",
@@ -45,5 +49,5 @@ agent = Agent(
     ),
     instruction=GENERATE_QUERY_PROMPT,
     output_schema=SearchQuery,
-    output_key="search_queries"
+    output_key="search_queries",
 )
