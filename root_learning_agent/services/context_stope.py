@@ -15,7 +15,7 @@ class ContextStore:
         """Initialize ContextStore with an empty in-memory store."""
         self.store = InMemoryStore()
 
-    def save_context(self, context_chunks: list, embeddings: list, key: str = None):
+    def save_context(self, context_chunks: list, embeddings: list, key: str | None = None):
         """Save context chunks and their embeddings to the store.
 
         Args:

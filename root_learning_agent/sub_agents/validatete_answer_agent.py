@@ -68,12 +68,12 @@ def before_model_callback(callback_context: CallbackContext, llm_request: LlmReq
     )
 
 agent = Agent(
-    name="question_generator_agent",
+    name="validatete_answer_agent",
     model="gemini-2.0-flash",
     description=(
         "Generates assessment questions based on current checkpoint verification requirements."
     ),
     instruction=VALIDATE_ANSWER_PROMPT,
     output_schema=LearningVerification,
-    output_key="current_question"
+    output_key="verifications"
 )

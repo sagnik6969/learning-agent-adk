@@ -63,5 +63,5 @@ agent = Agent(
     ),
     instruction=TEACH_CONCEPT_PROMPT,
     output_schema=FeynmanTeaching,
-    output_key="current_question"
+    output_key="teach_concept_result"
 )

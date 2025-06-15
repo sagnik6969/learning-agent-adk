@@ -5,7 +5,11 @@ from root_learning_agent.services.context_stope import ContextStore
 from root_learning_agent.sub_agents.checkpoint_generator_agent import (
     agent as checkpoint_generator_agent,
 )
-from root_learning_agent.utils import format_checkpoint_for_display
+from root_learning_agent.utils import (
+    format_checkpoint_for_display,
+    format_teaching_results,
+    format_verification_results,
+)
 from root_learning_agent.sub_agents.generate_query_agent import (
     agent as generate_query_for_web_search_agent,
 )
@@ -25,7 +29,6 @@ from .services.chunk_context import chunk_context
 from .services.search_web import search_web
 from google.genai.types import Content, Part
 
-
 embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
 context_store = ContextStore()
 # from .services.search_web import search_web
@@ -38,7 +41,7 @@ class LearningAgent(BaseAgent):
     generate_checkpoints_agent: LlmAgent
     generate_question_agent: LlmAgent
     verify_answer_agent: LlmAgent
-    tech_concept_agent: LlmAgent
+    teach_concept_agent: LlmAgent
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -51,7 +54,7 @@ class LearningAgent(BaseAgent):
         generate_checkpoints_agent: LlmAgent,
         generate_question_agent: LlmAgent,
         verify_answer_agent: LlmAgent,
-        tech_concept_agent: LlmAgent,
+        teach_concept_agent: LlmAgent,
     ):
         # content might be None or represent the action taken
 
@@ -62,7 +65,7 @@ class LearningAgent(BaseAgent):
             generate_checkpoints_agent,
             generate_question_agent,
             verify_answer_agent,
-            tech_concept_agent,
+            teach_concept_agent,
         ]
         super().__init__(
             name=name,
@@ -72,7 +75,7 @@ class LearningAgent(BaseAgent):
             generate_checkpoints_agent=generate_checkpoints_agent,
             generate_question_agent=generate_question_agent,
             verify_answer_agent=verify_answer_agent,
-            # tech_concept_agent=tech_concept_agent,
+            teach_concept_agent=teach_concept_agent,
             sub_agents=sub_agent_list,
         )
 
@@ -145,27 +148,28 @@ class LearningAgent(BaseAgent):
 
             else:
                 state_changes = chunk_context(user_input)
+                print(state_changes)
                 yield self.get_state_update_event(state_changes)
+
+            if "current_checkpoint" not in ctx.session.state:
+                yield self.get_state_update_event({"current_checkpoint": 0})
 
             async for event in self.generate_question_agent.run_async(ctx):
                 event.content = None
                 yield event
 
             yield self.get_ai_text_message_event(
-                ctx.session.state["current_question"]["question"]
+                [ctx.session.state["current_question"]["question"]]
             )
             yield self.get_state_update_event(
                 {"previous_step": self.generate_question_agent.name}
             )
 
-        elif (
-            ctx.session.state["previous_step"]
-            == generate_query_for_web_search_agent.name
-        ):
+        elif ctx.session.state["previous_step"] == self.generate_question_agent.name:
             users_answer = ctx.session.events[-1].content.parts[0].text
 
             current_checkpoint_idx = ctx.session.state["current_checkpoint"]
-            checkpoint_info = ctx.session.state["checkpoints"].checkpoints[
+            checkpoint_info = ctx.session.state["checkpoints"]["checkpoints"][
                 current_checkpoint_idx
             ]
 
@@ -183,33 +187,40 @@ class LearningAgent(BaseAgent):
             yield self.get_state_update_event(state_changes)
 
             async for event in self.verify_answer_agent.run_async(ctx):
+                event.content = None
                 yield event
 
-            if ctx.session.state["verifications"]["understanding_level"] < 0.7:
-                next_step = "teach_concept"
+            yield self.get_ai_text_message_event(
+                [format_verification_results(ctx.session.state["verifications"])]
+            )
 
-            elif current_checkpoint_idx + 1 < len(
+            if ctx.session.state["verifications"]["understanding_level"] < 0.7:
+                # Teach concept if unterstanding level is bellow threshold
+                async for event in self.teach_concept_agent.run_async(ctx):
+                    event.content = None
+                    yield event
+                
+                yield self.get_ai_text_message_event(
+                [format_teaching_results(ctx.session.state["teach_concept_result"])]
+            )
+
+                
+
+            if current_checkpoint_idx + 1 < len(
                 ctx.session.state["checkpoints"]["checkpoints"]
             ):
-                next_step = "next_checkpoint"
-            else:
-                next_step = "END"
-
-            if next_step == "teach_concept":
-                async for event in self.tech_concept_agent.run_async(ctx):
-                    yield event
-            elif next_step == "next_checkpoint":
+                # Go to xext check point
                 state_changes = {"current_checkpoint": current_checkpoint_idx + 1}
-
                 yield self.get_state_update_event(state_changes)
-
                 async for event in self._run_async_impl(ctx):
                     yield event
             else:
+                ## __END__
                 yield self.get_ai_text_message_event(
                     ["All the concepts are taught successfully.!! 🥳🥳🥳"]
                 )
                 yield self.get_state_update_event({"previous_step": "END"})
+
         elif ctx.session.state["previous_step"] == "END":
             yield self.get_ai_text_message_event(
                 ["All the concepts are taught successfully.!! 🥳🥳🥳"]

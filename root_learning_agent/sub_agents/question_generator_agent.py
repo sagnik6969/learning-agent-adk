@@ -22,12 +22,7 @@ class QuestionOutput(BaseModel):
 
 
 def before_model_callback(callback_context: CallbackContext, llm_request: LlmRequest):
-    current_checkpoint = (
-        callback_context.state["current_checkpoint"]
-        if "current_checkpoint" in callback_context.state
-        else 0
-    )
-    callback_context.state["current_checkpoint"] = current_checkpoint
+    current_checkpoint = callback_context.state["current_checkpoint"]
 
     checkpoint_info = callback_context.state["checkpoints"][current_checkpoint]
 
